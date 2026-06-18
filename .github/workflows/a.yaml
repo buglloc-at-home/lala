@@ -50,7 +50,6 @@ concurrency:
 
 jobs:
   check-running-allowed:
-    runs-on: [self-hosted, "self-hosted", "runner_light"]
     outputs:
       result: ${{ steps.allow-local.outputs.result || steps.check-ownership-membership.outputs.result }}
     steps:
