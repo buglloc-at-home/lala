@@ -50,6 +50,7 @@ concurrency:
 
 jobs:
   check-running-allowed:
+    runs-on: ubuntu-latest
     outputs:
       result: ${{ steps.allow-local.outputs.result || steps.check-ownership-membership.outputs.result }}
     steps:
