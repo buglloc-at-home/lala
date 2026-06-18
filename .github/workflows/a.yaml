@@ -1,0 +1,94 @@
+name: Check github workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/**"
+    types:
+      - "opened"
+      - "synchronize"
+      - "reopened"
+      - "labeled"
+  workflow_dispatch:
+    inputs:
+      allow_downgrade:
+        description: "Allow downgrade"
+        required: false
+        type: choice
+        default: "no"
+        options:
+          - "yes"
+          - "no"
+      large_tests:
+        description: "Launch large tests"
+        required: false
+        type: choice
+        default: "no"
+        options:
+          - "yes"
+          - "no"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  allow_downgrade: ${{ vars.GLOBAL_ALLOW_DOWNGRADE == 'yes' || ((github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name,
+    'allow-downgrade')) || inputs.allow_downgrade == 'yes') }}
+  large_tests: ${{ (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'large-tests'))  && 'true' || inputs.large_tests == 'yes' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check-running-allowed:
+    runs-on: [self-hosted, "self-hosted", "runner_light"]
+    outputs:
+      result: ${{ steps.allow-local.outputs.result || steps.check-ownership-membership.outputs.result }}
+    steps:
+      - name: Allow local act run
+        if: ${{ env.ACT == 'true' }}
+        id: allow-local
+        run: echo "result=true" >> "$GITHUB_OUTPUT"
+
+      - name: checkout workflow scripts
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+          sparse-checkout: ".github"
+          clean: true
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: disable sparse checkout (workaround for actions/checkout/issues/2249)
+        if: ${{ always() }}
+        run: git config core.sparseCheckout false
+        continue-on-error: true
+
+      - name: Check if running tests is allowed
+        if: ${{ env.ACT != 'true' }}
+        id: check-ownership-membership
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          script: |
+            const checkOwnershipMembership = require('./.github/scripts/check-ownership-membership.js');
+            return await checkOwnershipMembership({ github, context, core });
+
+      - name: comment-if-waiting-on-ok
+        uses: actions/github-script@v9
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Hi! Thank you for contributing!\nThe tests on this PR will run after a maintainer adds an `ok-to-test` label to this PR manually. Thank you for your patience!'
+            });
