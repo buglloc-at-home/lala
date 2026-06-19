@@ -1,14 +1,14 @@
 name: PR-description
 
-on:
-  pull_request_target:
-    types:
-      - opened
-      - edited
+# on:
+  # pull_request_target:
+  #   types:
+  #     - opened
+  #     - edited
 
-    branches:
-      - main
-      - l*
+  #   branches:
+  #     - main
+  #     - l*
 
 jobs:
   validate-pr-description:
